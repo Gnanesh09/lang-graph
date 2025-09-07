@@ -1,0 +1,63 @@
+from typing import TypedDict, Annotated
+from langchain_core.messages import HumanMessage
+from langgraph.graph import add_messages,StateGraph,END
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class State(TypedDict):
+    messages:Annotated[list, add_messages]
+
+llm = ChatGroq(model="llama-3.3-70b-versatile")
+GENERATE_POST = "generate_post"
+GET_REVIEW_DECISION = "get_review_decision"
+POST = "post"
+COLLECT_FEEDBACK = "collect_feedback"
+
+def generate_posts(state: State):
+    return{
+        "messages": [llm.invoke(state["messages"])]
+
+    }
+
+def get_review_decision(state: State):
+    post_content = state["messages"][-1].content
+    print(f"\n current linkedin post for u: \n {post_content}\n")
+
+    decision = input("postt to linkedin? (Yes or no): ")
+
+    if decision.lower() == "yes":
+        return POST
+    else:
+        return COLLECT_FEEDBACK
+    
+def post(state:State):
+    final_post = state["messages"][-1].content
+    print(f"final linked post\n{final_post}\n post is now live in linked ")
+
+def collect_feedback(state: State):
+    feedback = input ("how can i imporeve this? ")
+    return{
+        "messages": [HumanMessage(content=feedback)]
+    }
+
+graph  = StateGraph(State)
+graph.add_node(GENERATE_POST, generate_posts)
+graph.add_node(GET_REVIEW_DECISION,get_review_decision)
+graph.add_node(POST,post)
+graph.add_node(COLLECT_FEEDBACK, collect_feedback)
+
+graph.set_entry_point(GENERATE_POST)
+graph.add_conditional_edges(GENERATE_POST, get_review_decision)
+graph.add_edge(POST, END)
+graph.add_edge(COLLECT_FEEDBACK, GENERATE_POST)
+
+app = graph.compile()
+
+res  = app.invoke({
+    "messages": [HumanMessage(content="write a alinkedin post on data scince giving tips for beginers")]
+})
+
+print(res)
